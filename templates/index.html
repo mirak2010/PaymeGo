@@ -168,10 +168,14 @@
       <input type="text" id="desc" placeholder="Description">
       <input type="text" id="gun-scanner-input" placeholder="Gun Scanner Input">
       <div id="reader"></div>
+
+      <!-- Pay button placed BEFORE Start Camera -->
+      <button type="button" class="pay-btn" onclick="handlePayment()" id="pay-btn">Pay</button>
       <button type="button" class="action-btn" onclick="startCamera()" id="start-btn">Start Camera</button>
-      
+
       <p id="status">Click "Start Camera" to begin scanning.</p>
       <div id="animation-box"></div>
+
     </form>
   </div>
 
@@ -223,6 +227,7 @@
       document.getElementById('desc').placeholder = t.desc;
       document.getElementById('gun-scanner-input').placeholder = t.gunScanner;
       document.getElementById('start-btn').innerText = t.start;
+      document.getElementById('pay-btn').innerText = t.pay;
       document.getElementById('status').innerText = t.clickToStart;
       document.getElementById('btn-uz').classList.toggle('active', lang === 'uz');
       document.getElementById('btn-ru').classList.toggle('active', lang === 'ru');
