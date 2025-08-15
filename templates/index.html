@@ -30,6 +30,13 @@
       width: 140px;
       margin-bottom: 10px;
     }
+    .logo-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 12px; /* space between logos */
+      margin-bottom: 10px;
+    }
 
     h2 {
       margin-top: 0;
@@ -142,8 +149,14 @@
   </style>
 </head>
 <body>
+  <!-- Two logos side by side -->
+  
   <div class="container">
-    <img src="static/paymelogo.png" alt="Payme Logo" class="logo">
+    <div class="logo-container">
+      <img src="static/coffeewaylogo.png" alt="Coffee Way Logo" class="logo">
+      <img src="static/paymelogo.png" alt="Payme Logo" class="logo">
+    </div>
+
     <h2 id="title">Scan Payme GO QR</h2>
 
     <div class="lang-switch">
@@ -179,6 +192,20 @@
     </form>
   </div>
 
+  <style>
+    /* Fade-out animation before refresh */
+    body.fade-out {
+      animation: fadeOut 1s forwards;
+    }
+
+    @keyframes fadeOut {
+      to {
+        opacity: 0;
+        transform: scale(0.98);
+      }
+    }
+  </style>
+
   <script>
     let scanner = null;
     let isCameraRunning = false;
@@ -189,23 +216,24 @@
         title: "Payme GO QR kodini skanerlash",
         amount: "Summani kiriting (UZS)",
         desc: "Izoh",
-        gunScanner: "Skaneri resultati",
+        gunScanner: "Skaner natijasi",
         start: "Kamerani yoqish",
         pay: "To‘lash",
         clickToStart: "📷 QR kodni skanerlash uchun 'Kamerani yoqish' tugmasini bosing.",
-        alreadyRunning: "⚠️ Kamera allaqan ishlayapti.",
+        alreadyRunning: "⚠️ Kamera allaqachon ishlayapti.",
         noCamera: "❌ Kamera topilmadi.",
         processing: "⏳ To'lov amalga oshirilmoqda...",
         success: "✅ To'lov muvaffaqiyatli yakunlandi!",
         failed: "❌ To'lov amalga oshmadi",
         enterAmount: "❌ Iltimos, summani kiriting.",
-        networkError: "❌ Tarmoq xatosi"
+        networkError: "❌ Tarmoq xatosi",
+        scannedReady: "✅ QR kod skanerlandi. Endi 'To‘lash' tugmasini bosing."
       },
       ru: {
         title: "Сканируйте QR Payme GO",
         amount: "Введите сумму (UZS)",
         desc: "Описание",
-        gunScanner: "Сканер штрихкода",
+        gunScanner: "Результат сканера",
         start: "Запустить камеру",
         pay: "Оплатить",
         clickToStart: "📷 Нажмите 'Запустить камеру' для сканирования QR-кода.",
@@ -215,7 +243,8 @@
         success: "✅ Платеж прошел успешно!",
         failed: "❌ Платеж не выполнен",
         enterAmount: "❌ Пожалуйста, введите сумму.",
-        networkError: "❌ Ошибка сети"
+        networkError: "❌ Ошибка сети",
+        scannedReady: "✅ QR-код отсканирован. Теперь нажмите кнопку 'Оплатить'."
       }
     };
 
@@ -236,6 +265,7 @@
     function startCamera() {
       const t = translations[currentLang];
       const status = document.getElementById('status');
+
       if (isCameraRunning) {
         status.innerText = t.alreadyRunning;
         return;
@@ -254,52 +284,23 @@
         scanner.start(
           cameraId,
           { fps: 10, qrbox: 250 },
-          (decodedText) => handleScanResult(decodedText),
-          (err) => console.warn("Scan error:", err)
+          (decodedText) => {
+            if (scanner) {
+              scanner.stop().then(() => {
+                isCameraRunning = false;
+              }).catch(() => {});
+            }
+            document.getElementById("gun-scanner-input").value = decodedText;
+            status.innerText = t.scannedReady;
+          }
         ).then(() => {
           isCameraRunning = true;
-          status.innerText = t.clickToStart;
         }).catch(err => {
-          status.innerText = "❌ Camera error: " + err;
+          status.innerText = `${t.networkError}: ${err}`;
         });
+
       }).catch(err => {
-        status.innerText = "❌ " + err;
-      });
-    }
-
-    function handleScanResult(qrCodeMessage) {
-      if (scanner) {
-        scanner.stop().then(() => {
-          isCameraRunning = false;
-        }).catch(() => {});
-      }
-
-      const t = translations[currentLang];
-      const amount = document.getElementById("amount").value.trim();
-      const desc = document.getElementById("desc").value.trim();
-
-      if (!amount) {
-        document.getElementById("status").innerText = t.enterAmount;
-        return;
-      }
-
-      document.getElementById("status").innerText = t.processing;
-
-      fetch("/pay", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: qrCodeMessage, amount, description: desc })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.status === "success") {
-          document.getElementById("status").innerText = t.success;
-        } else {
-          document.getElementById("status").innerText = `${t.failed}: ${JSON.stringify(data.response)}`;
-        }
-      })
-      .catch(err => {
-        document.getElementById("status").innerText = `${t.networkError}: ${err.message}`;
+        status.innerText = `${t.networkError}: ${err}`;
       });
     }
 
@@ -324,16 +325,19 @@
       fetch("/pay", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token: token,
-          amount: amount,
-          description: desc
-        })
+        body: JSON.stringify({ token, amount, description: desc })
       })
       .then(res => res.json())
       .then(data => {
         if (data.status === "success") {
           document.getElementById("status").innerText = t.success;
+          // Fade-out before refreshing
+          setTimeout(() => {
+            document.body.classList.add("fade-out");
+            setTimeout(() => {
+              location.reload();
+            }, 1000); // matches fadeOut animation time
+          }, 1500); // show success for 1.5s before fading out
         } else {
           document.getElementById("status").innerText = `${t.failed}: ${JSON.stringify(data.response)}`;
         }
@@ -350,11 +354,14 @@
         this.value = '';
       }
     });
+
     function setPreferredAmount(value) {
       document.getElementById('amount').value = value;
     }
 
+    // Default language
     setLanguage('uz');
   </script>
+
 </body>
 </html>
