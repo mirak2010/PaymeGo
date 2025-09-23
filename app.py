@@ -4,6 +4,8 @@ import requests
 import uuid
 
 app = Flask(__name__)
+TELEGRAM_TOKEN = "8358856727:AAEcPwzqkkikQ93XeSykwFZNDSDqIjYNBjI"
+CHAT_ID = "-4931371309"  # your group ID
 
 # LIVE credentials (move to .env or config file for production)
 X_AUTH = "684fb239dfc9ac0473696f29:fOOH#CY?vX@&Phdi05dYCv#kopHmnuSRBya8"
@@ -42,7 +44,7 @@ def pay():
         receipt_res = r.json()
     except requests.exceptions.RequestException as e:
         return jsonify({"status": "error", "step": "create", "message": str(e)})
-    
+
     if "result" not in receipt_res:
         return jsonify({"status": "error", "step": "create", "response": receipt_res})
 
@@ -66,6 +68,17 @@ def pay():
         return jsonify({"status": "error", "step": "pay", "message": str(e)})
 
     if "result" in pay_res:
+        # Send Telegram message on successful payment
+        amount_uzs = amount / 100  # convert back from tiyin to UZS
+        message = f"💳 Payment received!\n\nAmount: {amount_uzs} UZS\nDesc: {description}\nToken: {token}"
+        try:
+            requests.get(
+                f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+                params={"chat_id": CHAT_ID, "text": message}
+            )
+        except:
+            pass  # Don't fail payment if Telegram fails
+        
         return jsonify({"status": "success", "response": pay_res})
     else:
         return jsonify({"status": "error", "step": "pay", "response": pay_res})
