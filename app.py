@@ -70,7 +70,21 @@ def pay():
     if "result" in pay_res:
         # Send Telegram message on successful payment
         amount_uzs = amount / 100  # convert back from tiyin to UZS
-        message = f"💳 Payment received!\n\nAmount: {amount_uzs} UZS\nDesc: {description}\nToken: {token}"
+        transaction_id = pay_res["result"]["receipt"]["_id"]
+        
+        # Get current timestamp
+        from datetime import datetime
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        message = f"""🎉 Payment Successful!
+
+💰 Amount: {amount_uzs} UZS
+🆔 Transaction ID: {transaction_id}
+🏪 Merchant: PAYME Payment
+⏰ Time: {current_time}
+
+✅ Payment has been processed successfully!"""
+        
         try:
             requests.get(
                 f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
