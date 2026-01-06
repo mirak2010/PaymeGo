@@ -1,200 +1,386 @@
 <!DOCTYPE html>
-<html lang="uz">
+<html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Payme GO Scanner</title>
+  <meta charset="UTF-8">
+  <title>Payme QR Scanner</title>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      background: linear-gradient(to right, #f7f8fc, #e3e6f0);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 30px;
+    }
 
-<style>
-body {
-  font-family: Arial, sans-serif;
-  background: #f4f4f4;
-  margin: 0;
-  padding: 0;
-}
-.container {
-  max-width: 420px;
-  margin: 25px auto;
-  padding: 18px;
-  background: #fff;
-  border-radius: 14px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-}
-h2 {
-  margin-top: 0;
-  font-size: 20px;
-  text-align: center;
-}
-.status {
-  text-align: center;
-  margin-top: 10px;
-}
-input, select, button {
-  width: 100%;
-  padding: 10px;
-  margin-top: 10px;
-  border-radius: 10px;
-  border: 1px solid #ccc;
-  font-size: 14px;
-}
-button {
-  cursor: pointer;
-  border: none;
-  background: #222;
-  color: #fff;
-}
-button:disabled {
-  opacity: .6;
-  cursor: not-allowed;
-}
-.hidden { display:none; }
-#reader { width: 100%; margin-top: 10px; }
-.fade-out {
-  opacity: 0;
-  transition: opacity .6s ease;
-}
-</style>
+    .container {
+      background: white;
+      padding: 25px 30px;
+      border-radius: 20px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+      max-width: 420px;
+      width: 100%;
+      text-align: center;
+    }
+
+    .logo {
+      width: 140px;
+      margin-bottom: 10px;
+    }
+    .logo-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 12px; /* space between logos */
+      margin-bottom: 10px;
+    }
+
+    h2 {
+      margin-top: 0;
+      margin-bottom: 15px;
+      color: #333;
+    }
+
+    .lang-switch {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+
+    .lang-switch button {
+      flex: 1;
+      padding: 12px;
+      font-size: 16px;
+      font-weight: bold;
+      border: none;
+      background: #f0f0f0;
+      color: #333;
+      margin: 0 5px;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+
+    .lang-switch button.active {
+      background: #007bff;
+      color: white;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      margin: 8px 0;
+      border-radius: 10px;
+      border: 1px solid #ccc;
+      font-size: 15px;
+    }
+
+    #reader {
+      width: 100%;
+      max-width: 300px;
+      margin: 0 auto;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+    }
+
+    button.action-btn {
+      background: #00b2ff;
+      color: white;
+      padding: 12px 20px;
+      font-size: 16px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      margin-top: 10px;
+      width: 100%;
+      transition: background 0.3s;
+    }
+
+    button.action-btn:hover {
+      background: #0090d4;
+    }
+
+    button.pay-btn {
+      background: #28a745;
+      color: white;
+      padding: 12px 20px;
+      font-size: 16px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      margin-top: 10px;
+      width: 100%;
+      transition: background 0.3s;
+    }
+
+    button.pay-btn:hover {
+      background: #218838;
+    }
+
+    #status {
+      margin-top: 15px;
+      font-size: 14px;
+      color: #444;
+      min-height: 20px;
+    }
+
+    #animation-box {
+      margin-top: 20px;
+      height: 100px;
+    }
+    .preferred-amounts button {
+      background: #f0f0f0;
+      border: 1px solid #ccc;
+      margin: 4px;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 15px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    .preferred-amounts button:hover {
+      background: #d9eaff;
+    }
+
+  </style>
 </head>
-
 <body>
-<div class="container" id="page">
-  <h2 id="title">Payme GO Scanner</h2>
+  <!-- Two logos side by side -->
+  
+  <div class="container">
+    <div class="logo-container">
+      <img src="static/coffeewaylogo.png" alt="Coffee Way Logo" class="logo">
+      <img src="static/paymelogo.png" alt="Payme Logo" class="logo">
+    </div>
 
-  <div class="status" id="status">Click “Start Camera”</div>
+    <h2 id="title">Scan Payme GO QR</h2>
 
-  <div id="reader"></div>
+    <div class="lang-switch">
+      <button id="btn-uz" onclick="setLanguage('uz')">🇺🇿 O'zbek</button>
+      <button id="btn-ru" onclick="setLanguage('ru')">🇷🇺 Русский</button>
+    </div>
 
-  <button id="startBtn" type="button">Start Camera</button>
-  <button id="stopBtn" type="button" class="hidden">Stop Camera</button>
+    <form id="payment-form">
+      <input type="number" step="0.01" id="amount" placeholder="Amount (UZS)" required>
+      
 
-  <input id="scanner-input" placeholder="Scan QR or type token" />
+      <!-- Preferred amounts section -->
+      <div class="preferred-amounts" style="margin: 10px 0;">
+        
+        <div>
+          <button type="button" onclick="setPreferredAmount(23000)">23000</button>
+          <button type="button" onclick="setPreferredAmount(28000)">28000</button>
+          <button type="button" onclick="setPreferredAmount(33000)">33000</button>
+          <button type="button" onclick="setPreferredAmount(38000)">38000</button>
+        </div>
+      </div>
+      <input type="text" id="desc" placeholder="Description">
+      <input type="text" id="gun-scanner-input" placeholder="Gun Scanner Input">
+      <div id="reader"></div>
 
-  <input id="amount" type="number" placeholder="Amount" />
-  <button id="payBtn" type="button">Pay</button>
+      <!-- Pay button placed BEFORE Start Camera -->
+      <button type="button" class="pay-btn" onclick="handlePayment()" id="pay-btn">Pay</button>
+      <button type="button" class="action-btn" onclick="startCamera()" id="start-btn">Start Camera</button>
 
-  <button id="restartBtn" type="button" class="hidden">Scan Again</button>
-</div>
+      <p id="status">Click "Start Camera" to begin scanning.</p>
+      <div id="animation-box"></div>
 
-<script src="https://unpkg.com/html5-qrcode"></script>
-<script>
+    </form>
+  </div>
+
+  <style>
+    /* Fade-out animation before refresh */
+    body.fade-out {
+      animation: fadeOut 1s forwards;
+    }
+
+    @keyframes fadeOut {
+      to {
+        opacity: 0;
+        transform: scale(0.98);
+      }
+    }
+  </style>
+
+  <script>
+    let scanner = null;
+    let isCameraRunning = false;
+    let currentLang = 'uz';
+
+    const translations = {
+      uz: {
+        title: "Payme GO QR kodini skanerlash",
+        amount: "Summani kiriting (UZS)",
+        desc: "Izoh",
+        gunScanner: "Skaner natijasi",
+        start: "Kamerani yoqish",
+        pay: "To‘lash",
+        clickToStart: "📷 QR kodni skanerlash uchun 'Kamerani yoqish' tugmasini bosing.",
+        alreadyRunning: "⚠️ Kamera allaqachon ishlayapti.",
+        noCamera: "❌ Kamera topilmadi.",
+        processing: "⏳ To'lov amalga oshirilmoqda...",
+        success: "✅ To'lov muvaffaqiyatli yakunlandi!",
+        failed: "❌ To'lov amalga oshmadi",
+        enterAmount: "❌ Iltimos, summani kiriting.",
+        networkError: "❌ Tarmoq xatosi",
+        scannedReady: "✅ QR kod skanerlandi. Endi 'To‘lash' tugmasini bosing."
+      },
+      ru: {
+        title: "Сканируйте QR Payme GO",
+        amount: "Введите сумму (UZS)",
+        desc: "Описание",
+        gunScanner: "Результат сканера",
+        start: "Запустить камеру",
+        pay: "Оплатить",
+        clickToStart: "📷 Нажмите 'Запустить камеру' для сканирования QR-кода.",
+        alreadyRunning: "⚠️ Камера уже активна.",
+        noCamera: "❌ Камеры не найдены.",
+        processing: "⏳ Обработка платежа...",
+        success: "✅ Платеж прошел успешно!",
+        failed: "❌ Платеж не выполнен",
+        enterAmount: "❌ Пожалуйста, введите сумму.",
+        networkError: "❌ Ошибка сети",
+        scannedReady: "✅ QR-код отсканирован. Теперь нажмите кнопку 'Оплатить'."
+      }
+    };
+
+    function setLanguage(lang) {
+      currentLang = lang;
+      const t = translations[lang];
+      document.getElementById('title').innerText = t.title;
+      document.getElementById('amount').placeholder = t.amount;
+      document.getElementById('desc').placeholder = t.desc;
+      document.getElementById('gun-scanner-input').placeholder = t.gunScanner;
+      document.getElementById('start-btn').innerText = t.start;
+      document.getElementById('pay-btn').innerText = t.pay;
+      document.getElementById('status').innerText = t.clickToStart;
+      document.getElementById('btn-uz').classList.toggle('active', lang === 'uz');
+      document.getElementById('btn-ru').classList.toggle('active', lang === 'ru');
+    }
+
+ 
 let scanner = null;
 let isCameraRunning = false;
-let scanLocked = false;          // prevents multiple scans
-let paymentInProgress = false;   // prevents double-click payment
-
-const readerEl  = document.getElementById("reader");
-const statusEl  = document.getElementById("status");
-const startBtn  = document.getElementById("startBtn");
-const stopBtn   = document.getElementById("stopBtn");
-const restartBtn= document.getElementById("restartBtn");
-const scanInput = document.getElementById("scanner-input");
-const amountEl  = document.getElementById("amount");
-const payBtn    = document.getElementById("payBtn");
-
-function setStatus(text) { statusEl.innerText = text; }
+let scanLocked = false; // prevents multiple scans
 
 function startCamera() {
-  if (isCameraRunning) return;
+  const t = translations[currentLang];
+  const status = document.getElementById('status');
 
+  if (isCameraRunning) {
+    status.innerText = t.alreadyRunning;
+    return;
+  }
+
+  // Create scanner instance
   scanner = new Html5Qrcode("reader");
 
-  scanner.start(
-    { facingMode: "environment" },
-    { fps: 10, qrbox: 250 },
-    onScanSuccess,
-    err => {}
-  ).then(() => {
-    isCameraRunning = true;
-    setStatus("Camera running — scan QR");
-    startBtn.classList.add("hidden");
-    stopBtn.classList.remove("hidden");
-    restartBtn.classList.add("hidden");
-    scanLocked = false; // allow first scan
-  }).catch(() => {
-    setStatus("Camera failed to start");
+  Html5Qrcode.getCameras().then(devices => {
+    if (!devices || devices.length === 0) {
+      status.innerText = t.noCamera;
+      return;
+    }
+
+    const cameraId = devices[0].id;
+
+    scanner.start(
+      cameraId,
+      { fps: 10, qrbox: 250 },
+
+      // ✅ QR code scan callback
+      (decodedText) => {
+        if (scanLocked) return;  // Ignore additional scans
+        scanLocked = true;        // Lock scanning immediately
+
+        // Stop scanner immediately
+        scanner.stop().then(() => {
+          isCameraRunning = false;
+        }).catch(err => console.error("Scanner stop failed:", err));
+
+        // Fill input and update status
+        document.getElementById("gun-scanner-input").value = decodedText;
+        status.innerText = t.scannedReady;
+      }
+    )
+    .then(() => {
+      isCameraRunning = true;
+      scanLocked = false; // allow first scan
+      status.innerText = t.clickToStart;
+    })
+    .catch(err => {
+      status.innerText = `${t.networkError}: ${err}`;
+    });
+
+  }).catch(err => {
+    status.innerText = `${t.networkError}: ${err}`;
   });
 }
 
-function stopCamera() {
-  if (!scanner || !isCameraRunning) return;
 
-  scanner.stop().then(() => {
-    isCameraRunning = false;
-    startBtn.classList.remove("hidden");
-    stopBtn.classList.add("hidden");
-    setStatus("Camera stopped");
-  });
-}
 
-function onScanSuccess(text) {
-  if (scanLocked) return; // ignore repeated frames
+ function handlePayment() {
+  const t = translations[currentLang];
+  const amount = document.getElementById("amount").value.trim();
+  const desc = document.getElementById("desc").value.trim();
+  const token = document.getElementById("gun-scanner-input").value.trim();
 
-  scanLocked = true;      // lock immediately on first read
-  stopCamera();           // stop scanner right away
-
-  setStatus("QR scanned");
-  scanInput.value = text;
-
-  restartBtn.classList.remove("hidden");
-}
-
-restartBtn.onclick = () => {
-  scanInput.value = "";
-  amountEl.value = "";
-  scanLocked = false;
-  restartBtn.classList.add("hidden");
-  startCamera();
-};
-
-payBtn.onclick = handlePayment;
-
-function handlePayment() {
-  if (paymentInProgress) return;
-  paymentInProgress = true;
-
-  const token  = scanInput.value.trim();
-  const amount = parseInt(amountEl.value, 10);
+  if (!amount) {
+    document.getElementById("status").innerText = t.enterAmount;
+    return;
+  }
 
   if (!token) {
-    setStatus("No token scanned");
-    paymentInProgress = false;
-    return;
-  }
-  if (!amount || amount <= 0) {
-    setStatus("Enter valid amount");
-    paymentInProgress = false;
+    document.getElementById("status").innerText = "❌ QR token not found.";
     return;
   }
 
-  setStatus("Processing payment…");
-  payBtn.disabled = true;
+  document.getElementById("status").innerText = t.processing;
 
-  // ----- your API request here -----
-  // Replace this with your real fetch call
-  fakePaymeRequest(token, amount)
-    .then(() => {
-      setStatus("Payment successful");
-      scanLocked = false;
-      paymentInProgress = false;
-      payBtn.disabled = false;
-      restartBtn.classList.remove("hidden");
-    })
-    .catch(() => {
-      setStatus("Payment failed — try again");
-      scanLocked = false;
-      paymentInProgress = false;
-      payBtn.disabled = false;
-      restartBtn.classList.remove("hidden");
+  fetch("/pay", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, amount, description: desc })
+  })
+  .then(res => res.json())
+  .then(data => {
+    scanLocked = false; // unlock scanner after payment
+
+    if (data.status === "success") {
+      document.getElementById("status").innerText = t.success;
+      setTimeout(() => {
+        document.body.classList.add("fade-out");
+        setTimeout(() => { location.reload(); }, 1000);
+      }, 1500);
+    } else {
+      document.getElementById("status").innerText = `${t.failed}: ${JSON.stringify(data.response)}`;
+    }
+  })
+  .catch(err => {
+    scanLocked = false; // unlock scanner on error
+    document.getElementById("status").innerText = `${t.networkError}: ${err.message}`;
+  });
+}
+
+
+    document.getElementById('gun-scanner-input').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handlePayment();
+        this.value = '';
+      }
     });
-}
 
-// mock fn — replace with real API
-function fakePaymeRequest() {
-  return new Promise(resolve => setTimeout(resolve, 1200));
-}
+    function setPreferredAmount(value) {
+      document.getElementById('amount').value = value;
+    }
 
-startBtn.onclick = startCamera;
-stopBtn.onclick  = stopCamera;
-</script>
+    // Default language
+    setLanguage('uz');
+  </script>
+
 </body>
 </html>
