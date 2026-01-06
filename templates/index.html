@@ -14,7 +14,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            padding: 30px;
+            padding: 20px;
             min-height: 100vh;
         }
 
@@ -33,12 +33,12 @@
             justify-content: center;
             align-items: center;
             gap: 12px;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
         }
 
-        .logo { width: 120px; height: auto; }
+        .logo { width: 110px; height: auto; }
 
-        h2 { margin: 0 0 15px; color: #333; font-size: 1.4rem; }
+        h2 { margin: 0 0 15px; color: #333; font-size: 1.3rem; }
 
         .lang-switch {
             display: flex;
@@ -51,12 +51,10 @@
             flex: 1;
             padding: 10px;
             font-size: 14px;
-            font-weight: bold;
             border: 1px solid #ddd;
             background: #f8f9fa;
             border-radius: 10px;
             cursor: pointer;
-            transition: 0.3s;
         }
 
         .lang-switch button.active {
@@ -82,13 +80,15 @@
             background: #fafafa;
         }
 
-        button.action-btn { background: #00b2ff; color: white; width: 100%; padding: 12px; border: none; border-radius: 10px; cursor: pointer; margin-top: 10px; font-weight: bold; }
-        button.pay-btn { background: #28a745; color: white; width: 100%; padding: 14px; border: none; border-radius: 10px; cursor: pointer; margin-top: 10px; font-weight: bold; font-size: 1.1rem; }
+        .action-btn { background: #00b2ff; color: white; width: 100%; padding: 12px; border: none; border-radius: 10px; cursor: pointer; margin-top: 10px; font-weight: bold; }
+        .pay-btn { background: #28a745; color: white; width: 100%; padding: 14px; border: none; border-radius: 10px; cursor: pointer; margin-top: 10px; font-weight: bold; font-size: 1.1rem; }
+        
+        button:disabled { background: #ccc !important; cursor: not-allowed; }
 
         .preferred-amounts { margin: 10px 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; }
         .preferred-amounts button { background: #f0f0f0; border: 1px solid #ccc; padding: 8px 12px; border-radius: 8px; cursor: pointer; }
 
-        #status { margin-top: 15px; font-size: 14px; color: #555; font-weight: 500; }
+        #status { margin-top: 15px; font-size: 14px; color: #555; min-height: 40px; }
 
         body.fade-out { animation: fadeOut 1s forwards; }
         @keyframes fadeOut { to { opacity: 0; transform: scale(0.98); } }
@@ -120,7 +120,7 @@
         </div>
 
         <input type="text" id="desc" placeholder="Description">
-        <input type="text" id="gun-scanner-input" placeholder="QR Token Result">
+        <input type="text" id="gun-scanner-input" placeholder="QR Token Result" maxlength="20">
         
         <div id="reader"></div>
 
@@ -134,7 +134,7 @@
 <script>
     let html5QrCode = null;
     let isCameraRunning = false;
-    let scanLocked = false;
+    let scanLocked = false; 
     let currentLang = 'uz';
 
     const translations = {
@@ -153,8 +153,7 @@
             failed: "❌ To'lov amalga oshmadi",
             enterAmount: "❌ Iltimos, summani kiriting.",
             noToken: "❌ QR token topilmadi.",
-            networkError: "❌ Tarmoq xatosi",
-            scannedReady: "✅ QR kod skanerlandi. Endi 'To‘lash' tugmasini bosing."
+            networkError: "❌ Tarmoq xatosi"
         },
         ru: {
             title: "Сканируйте QR Payme GO",
@@ -171,8 +170,7 @@
             failed: "❌ Платеж не выполнен",
             enterAmount: "❌ Пожалуйста, введите сумму.",
             noToken: "❌ QR токен не найден.",
-            networkError: "❌ Ошибка сети",
-            scannedReady: "✅ QR-код отсканирован. Теперь нажмите кнопку 'Оплатить'."
+            networkError: "❌ Ошибка сети"
         }
     };
 
@@ -194,10 +192,7 @@
         const t = translations[currentLang];
         const status = document.getElementById('status');
 
-        if (isCameraRunning) {
-            status.innerText = t.alreadyRunning;
-            return;
-        }
+        if (isCameraRunning || scanLocked) return;
 
         html5QrCode = new Html5Qrcode("reader");
 
@@ -207,30 +202,39 @@
                 return;
             }
 
-            // Prefer back camera
             const cameraId = devices.length > 1 ? devices[1].id : devices[0].id;
 
             html5QrCode.start(
                 cameraId,
                 { fps: 10, qrbox: { width: 250, height: 250 } },
                 (decodedText) => {
-                    if (scanLocked) return;
-                    scanLocked = true;
-
-                    document.getElementById("gun-scanner-input").value = decodedText;
-                    status.innerText = t.scannedReady;
-
-                    html5QrCode.stop().then(() => {
-                        isCameraRunning = false;
-                    }).catch(err => console.error(err));
+                    // Check for 20 character token
+                    if (!scanLocked && decodedText.length === 20) {
+                        processScanResult(decodedText);
+                    }
                 }
             ).then(() => {
                 isCameraRunning = true;
-                scanLocked = false;
+                status.innerText = "🔍 Scanning...";
             }).catch(err => {
                 status.innerText = `${t.networkError}: ${err}`;
             });
         });
+    }
+
+    function processScanResult(token) {
+        scanLocked = true; // Lock immediately
+        document.getElementById("gun-scanner-input").value = token;
+        
+        // Stop camera if it's running
+        if (html5QrCode) {
+            html5QrCode.stop().then(() => {
+                isCameraRunning = false;
+            }).catch(err => console.error(err));
+        }
+
+        // Trigger automatic payment
+        handlePayment();
     }
 
     function handlePayment() {
@@ -241,14 +245,19 @@
 
         if (!amount) {
             document.getElementById("status").innerText = t.enterAmount;
+            scanLocked = false; // Allow retry if amount was missing
             return;
         }
         if (!token) {
             document.getElementById("status").innerText = t.noToken;
+            scanLocked = false;
             return;
         }
 
+        // UI Lockdown
         document.getElementById("status").innerText = t.processing;
+        document.getElementById("pay-btn").disabled = true;
+        document.getElementById("start-btn").disabled = true;
 
         fetch("/pay", {
             method: "POST",
@@ -264,24 +273,31 @@
                     setTimeout(() => { location.reload(); }, 1000);
                 }, 1500);
             } else {
-                scanLocked = false;
                 document.getElementById("status").innerText = `${t.failed}: ${data.message || "Error"}`;
+                // Re-enable on failure so they can try again
+                resetUI();
             }
         })
         .catch(err => {
-            scanLocked = false;
             document.getElementById("status").innerText = `${t.networkError}: ${err.message}`;
+            resetUI();
         });
+    }
+
+    function resetUI() {
+        scanLocked = false;
+        document.getElementById("pay-btn").disabled = false;
+        document.getElementById("start-btn").disabled = false;
     }
 
     function setPreferredAmount(value) {
         document.getElementById('amount').value = value;
     }
 
-    // Handle Gun Scanner physical enter key
-    document.getElementById('gun-scanner-input').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            handlePayment();
+    // Handle Hardware Gun Scanner (detects 20 digits then Enter)
+    document.getElementById('gun-scanner-input').addEventListener('input', function(e) {
+        if (this.value.length === 20 && !scanLocked) {
+            processScanResult(this.value);
         }
     });
 
