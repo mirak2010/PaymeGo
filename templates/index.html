@@ -262,90 +262,102 @@
       document.getElementById('btn-ru').classList.toggle('active', lang === 'ru');
     }
 
-    function startCamera() {
-      const t = translations[currentLang];
-      const status = document.getElementById('status');
+  let scanLocked = false; // NEW: prevent multiple scans
 
-      if (isCameraRunning) {
-        status.innerText = t.alreadyRunning;
-        return;
-      }
+function startCamera() {
+  const t = translations[currentLang];
+  const status = document.getElementById('status');
 
-      scanner = new Html5Qrcode("reader");
+  if (isCameraRunning) {
+    status.innerText = t.alreadyRunning;
+    return;
+  }
 
-      Html5Qrcode.getCameras().then(devices => {
-        if (!devices || devices.length === 0) {
-          status.innerText = t.noCamera;
-          return;
-        }
+  scanner = new Html5Qrcode("reader");
 
-        const cameraId = devices[0].id;
-
-        scanner.start(
-          cameraId,
-          { fps: 10, qrbox: 250 },
-          (decodedText) => {
-            if (scanner) {
-              scanner.stop().then(() => {
-                isCameraRunning = false;
-              }).catch(() => {});
-            }
-            document.getElementById("gun-scanner-input").value = decodedText;
-            status.innerText = t.scannedReady;
-          }
-        ).then(() => {
-          isCameraRunning = true;
-        }).catch(err => {
-          status.innerText = `${t.networkError}: ${err}`;
-        });
-
-      }).catch(err => {
-        status.innerText = `${t.networkError}: ${err}`;
-      });
+  Html5Qrcode.getCameras().then(devices => {
+    if (!devices || devices.length === 0) {
+      status.innerText = t.noCamera;
+      return;
     }
 
-    function handlePayment() {
-      const t = translations[currentLang];
-      const amount = document.getElementById("amount").value.trim();
-      const desc = document.getElementById("desc").value.trim();
-      const token = document.getElementById("gun-scanner-input").value.trim();
+    const cameraId = devices[0].id;
 
-      if (!amount) {
-        document.getElementById("status").innerText = t.enterAmount;
-        return;
-      }
+    scanner.start(
+      cameraId,
+      { fps: 10, qrbox: 250 },
+      (decodedText) => {
+        if (scanLocked) return; // ignore additional scans
+        scanLocked = true;       // lock scanning immediately
 
-      if (!token) {
-        document.getElementById("status").innerText = "❌ QR token not found.";
-        return;
-      }
+        document.getElementById("gun-scanner-input").value = decodedText;
+        status.innerText = t.scannedReady;
 
-      document.getElementById("status").innerText = t.processing;
-
-      fetch("/pay", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, amount, description: desc })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.status === "success") {
-          document.getElementById("status").innerText = t.success;
-          // Fade-out before refreshing
-          setTimeout(() => {
-            document.body.classList.add("fade-out");
-            setTimeout(() => {
-              location.reload();
-            }, 1000); // matches fadeOut animation time
-          }, 1500); // show success for 1.5s before fading out
-        } else {
-          document.getElementById("status").innerText = `${t.failed}: ${JSON.stringify(data.response)}`;
+        // Stop scanner after first scan
+        if (scanner) {
+          scanner.stop().then(() => {
+            isCameraRunning = false;
+          }).catch(() => {});
         }
-      })
-      .catch(err => {
-        document.getElementById("status").innerText = `${t.networkError}: ${err.message}`;
-      });
+      }
+    ).then(() => {
+      isCameraRunning = true;
+      scanLocked = false; // unlock for first scan
+    }).catch(err => {
+      status.innerText = `${t.networkError}: ${err}`;
+    });
+
+  }).catch(err => {
+    status.innerText = `${t.networkError}: ${err}`;
+  });
+}
+
+
+   function handlePayment() {
+  const t = translations[currentLang];
+  const amount = document.getElementById("amount").value.trim();
+  const desc = document.getElementById("desc").value.trim();
+  const token = document.getElementById("gun-scanner-input").value.trim();
+
+  if (!amount) {
+    document.getElementById("status").innerText = t.enterAmount;
+    return;
+  }
+
+  if (!token) {
+    document.getElementById("status").innerText = "❌ QR token not found.";
+    return;
+  }
+
+  document.getElementById("status").innerText = t.processing;
+
+  fetch("/pay", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, amount, description: desc })
+  })
+  .then(res => res.json())
+  .then(data => {
+    scanLocked = false; // UNLOCK scanner after payment
+
+    if (data.status === "success") {
+      document.getElementById("status").innerText = t.success;
+      setTimeout(() => {
+        document.body.classList.add("fade-out");
+        setTimeout(() => {
+          location.reload();
+        }, 1000);
+      }, 1500);
+    } else {
+      document.getElementById("status").innerText = `${t.failed}: ${JSON.stringify(data.response)}`;
     }
+  })
+  .catch(err => {
+    scanLocked = false; // UNLOCK scanner on error
+    document.getElementById("status").innerText = `${t.networkError}: ${err.message}`;
+  });
+}
+
 
     document.getElementById('gun-scanner-input').addEventListener('keypress', function(e) {
       if (e.key === 'Enter') {
