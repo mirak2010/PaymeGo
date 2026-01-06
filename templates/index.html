@@ -262,7 +262,10 @@
       document.getElementById('btn-ru').classList.toggle('active', lang === 'ru');
     }
 
-  let scanLocked = false; // NEW: prevent multiple scans
+ 
+let scanner = null;
+let isCameraRunning = false;
+let scanLocked = false; // prevents multiple scans
 
 function startCamera() {
   const t = translations[currentLang];
@@ -273,6 +276,7 @@ function startCamera() {
     return;
   }
 
+  // Create scanner instance
   scanner = new Html5Qrcode("reader");
 
   Html5Qrcode.getCameras().then(devices => {
@@ -286,24 +290,28 @@ function startCamera() {
     scanner.start(
       cameraId,
       { fps: 10, qrbox: 250 },
-      (decodedText) => {
-        if (scanLocked) return; // ignore additional scans
-        scanLocked = true;       // lock scanning immediately
 
+      // ✅ QR code scan callback
+      (decodedText) => {
+        if (scanLocked) return;  // Ignore additional scans
+        scanLocked = true;        // Lock scanning immediately
+
+        // Stop scanner immediately
+        scanner.stop().then(() => {
+          isCameraRunning = false;
+        }).catch(err => console.error("Scanner stop failed:", err));
+
+        // Fill input and update status
         document.getElementById("gun-scanner-input").value = decodedText;
         status.innerText = t.scannedReady;
-
-        // Stop scanner after first scan
-        if (scanner) {
-          scanner.stop().then(() => {
-            isCameraRunning = false;
-          }).catch(() => {});
-        }
       }
-    ).then(() => {
+    )
+    .then(() => {
       isCameraRunning = true;
-      scanLocked = false; // unlock for first scan
-    }).catch(err => {
+      scanLocked = false; // allow first scan
+      status.innerText = t.clickToStart;
+    })
+    .catch(err => {
       status.innerText = `${t.networkError}: ${err}`;
     });
 
@@ -313,7 +321,8 @@ function startCamera() {
 }
 
 
-   function handlePayment() {
+
+ function handlePayment() {
   const t = translations[currentLang];
   const amount = document.getElementById("amount").value.trim();
   const desc = document.getElementById("desc").value.trim();
@@ -338,22 +347,20 @@ function startCamera() {
   })
   .then(res => res.json())
   .then(data => {
-    scanLocked = false; // UNLOCK scanner after payment
+    scanLocked = false; // unlock scanner after payment
 
     if (data.status === "success") {
       document.getElementById("status").innerText = t.success;
       setTimeout(() => {
         document.body.classList.add("fade-out");
-        setTimeout(() => {
-          location.reload();
-        }, 1000);
+        setTimeout(() => { location.reload(); }, 1000);
       }, 1500);
     } else {
       document.getElementById("status").innerText = `${t.failed}: ${JSON.stringify(data.response)}`;
     }
   })
   .catch(err => {
-    scanLocked = false; // UNLOCK scanner on error
+    scanLocked = false; // unlock scanner on error
     document.getElementById("status").innerText = `${t.networkError}: ${err.message}`;
   });
 }
