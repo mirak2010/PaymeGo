@@ -8,7 +8,7 @@ TELEGRAM_TOKEN = "8358856727:AAEcPwzqkkikQ93XeSykwFZNDSDqIjYNBjI"
 CHAT_ID = "-4931371309"  # your group ID
 
 # LIVE credentials (move to .env or config file for production)
-X_AUTH = " 69b7d0a8a9308821b93fe4e0:ec8WgoNvi4oJVbQq30Vmwi2rQok2hTFHav82"
+X_AUTH = "69b7d0a8a9308821b93fe4e0:ec8WgoNvi4oJVbQq30Vmwi2rQok2hTFHav82"
 PAYME_API = "https://checkout.paycom.uz/api"
 
 headers = {
