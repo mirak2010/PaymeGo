@@ -73,9 +73,13 @@ def pay():
         transaction_id = pay_res["result"]["receipt"]["_id"]
         
         # Get current timestamp
-        from datetime import datetime
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
+       from datetime import datetime
+       from zoneinfo import ZoneInfo
+
+       current_time = datetime.now(
+       ZoneInfo("Asia/Tashkent")
+       ).strftime("%Y-%m-%d %H:%M:%S")
+         
         message = f"""🎉 Payment Successful!
 
 💰 Amount: {amount_uzs} UZS
