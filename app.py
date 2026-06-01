@@ -1,9 +1,12 @@
-
 from flask import Flask, render_template, request, jsonify
 import requests
 import uuid
+import logging
+from datetime import datetime
 
 app = Flask(__name__)
+logging.basicConfig(level=logging.INFO)
+
 TELEGRAM_TOKEN = "8358856727:AAEcPwzqkkikQ93XeSykwFZNDSDqIjYNBjI"
 CHAT_ID = "-4931371309"  # your group ID
 
@@ -43,10 +46,12 @@ def pay():
         r.raise_for_status()
         receipt_res = r.json()
     except requests.exceptions.RequestException as e:
-        return jsonify({"status": "error", "step": "create", "message": str(e)})
+        logging.error(f"Receipt creation error: {str(e)}")
+        return jsonify({"status": "error", "step": "create", "message": str(e)}), 500
 
     if "result" not in receipt_res:
-        return jsonify({"status": "error", "step": "create", "response": receipt_res})
+        logging.error(f"Receipt creation failed: {receipt_res}")
+        return jsonify({"status": "error", "step": "create", "response": receipt_res}), 400
 
     receipt_id = receipt_res["result"]["receipt"]["_id"]
 
@@ -65,15 +70,13 @@ def pay():
         r2.raise_for_status()
         pay_res = r2.json()
     except requests.exceptions.RequestException as e:
-        return jsonify({"status": "error", "step": "pay", "message": str(e)})
+        logging.error(f"Payment error: {str(e)}")
+        return jsonify({"status": "error", "step": "pay", "message": str(e)}), 500
 
     if "result" in pay_res:
         # Send Telegram message on successful payment
         amount_uzs = amount / 100  # convert back from tiyin to UZS
         transaction_id = pay_res["result"]["receipt"]["_id"]
-        
-        # Get current timestamp
-        from datetime import datetime
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         message = f"""🎉 Payment Successful!
@@ -88,14 +91,25 @@ def pay():
         try:
             requests.get(
                 f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-                params={"chat_id": CHAT_ID, "text": message}
+                params={"chat_id": CHAT_ID, "text": message},
+                timeout=5
             )
-        except:
-            pass  # Don't fail payment if Telegram fails
+        except Exception as e:
+            logging.warning(f"Telegram notification failed: {str(e)}")
         
-        return jsonify({"status": "success", "response": pay_res})
+        return jsonify({"status": "success", "response": pay_res}), 200
     else:
-        return jsonify({"status": "error", "step": "pay", "response": pay_res})
+        logging.error(f"Payment failed: {pay_res}")
+        return jsonify({"status": "error", "step": "pay", "response": pay_res}), 400
+
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({"status": "error", "message": "Not found"}), 404
+
+@app.errorhandler(500)
+def server_error(error):
+    logging.error(f"Server error: {str(error)}")
+    return jsonify({"status": "error", "message": "Internal server error"}), 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=False)
