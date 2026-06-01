@@ -1,3 +1,102 @@
+Skip to content
+mirak2010
+PaymeGo
+Repository navigation
+Code
+Issues
+Pull requests
+Agents
+Actions
+Projects
+Wiki
+Security and quality
+2
+ (2)
+Insights
+Settings
+PaymeGo
+/
+app.py
+in
+main
+
+Edit
+
+Preview
+Indent mode
+
+Spaces
+Indent size
+
+4
+Line wrap mode
+
+No wrap
+Editing app.py file contents
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ 18
+ 19
+ 20
+ 21
+ 22
+ 23
+ 24
+ 25
+ 26
+ 27
+ 28
+ 29
+ 30
+ 31
+ 32
+ 33
+ 34
+ 35
+ 36
+ 37
+ 38
+ 39
+ 40
+ 41
+ 42
+ 43
+ 44
+ 45
+ 46
+ 47
+ 48
+ 49
+ 50
+ 51
+ 52
+ 53
+ 54
+ 55
+ 56
+ 57
+ 58
+ 59
+ 60
+ 61
+ 62
+ 63
+ 64
 import os
 import time
 import requests
@@ -62,68 +161,4 @@ def pay():
         r.raise_for_status()
         receipt_res = r.json()
     except requests.exceptions.RequestException as e:
-        return jsonify({"status": "error", "step": "create_network", "message": str(e)}), 500
-
-    # Catch internal JSON-RPC business logic errors
-    if "error" in receipt_res:
-        return jsonify({"status": "error", "step": "create_business", "response": receipt_res}), 400
-    if "result" not in receipt_res or "receipt" not in receipt_res["result"]:
-        return jsonify({"status": "error", "step": "create_parsing", "response": receipt_res}), 400
-
-    receipt_id = receipt_res["result"]["receipt"]["_id"]
-
-    # 2. Pay Receipt Payload
-    pay_payload = {
-        "jsonrpc": "2.0",
-        "method": "receipts.pay",
-        "params": {
-            "id": receipt_id,
-            "token": token
-        },
-        "id": rpc_id + 1
-    }
-
-    try:
-        r2 = requests.post(PAYME_API, json=pay_payload, headers=headers, timeout=10)
-        r2.raise_for_status()
-        pay_res = r2.json()
-    except requests.exceptions.RequestException as e:
-        return jsonify({"status": "error", "step": "pay_network", "message": str(e)}), 500
-
-    if "error" in pay_res:
-        return jsonify({"status": "error", "step": "pay_business", "response": pay_res}), 400
-
-    # 3. Handle Application Success Output
-    if "result" in pay_res and "receipt" in pay_res["result"]:
-        amount_uzs = amount / 100
-        transaction_id = pay_res["result"]["receipt"]["_id"]
-        current_time = datetime.now(ZoneInfo("Asia/Tashkent")).strftime("%Y-%m-%d %H:%M:%S")
-
-        message = f"""
-🎉 <b>Payment Successful!</b>
-
-💰 <b>Amount:</b> {amount_uzs:,.2f} UZS
-🆔 <b>Transaction ID:</b> {transaction_id}
-🏪 <b>Merchant:</b> PAYME Payment
-⏰ <b>Time:</b> {current_time} (Tashkent)
-
-✅ Payment has been processed successfully!
-"""
-        # Async-safe Notification dispatching 
-        try:
-            requests.get(
-                f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-                params={"chat_id": CHAT_ID, "text": message, "parse_mode": "HTML"},
-                timeout=4
-            )
-        except requests.exceptions.RequestException:
-            pass
-
-        return jsonify({"status": "success", "response": pay_res})
-
-    else:
-        return jsonify({"status": "error", "step": "pay_unknown", "response": pay_res}), 400
-
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+Use Control + Shift + m to toggle the tab key moving focus. Alternatively, use esc then tab to move to the next interactive element on the page.
