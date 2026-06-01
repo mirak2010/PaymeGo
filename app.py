@@ -1,24 +1,25 @@
 import os
-import uuid
-from datetime import datetime
-from zoneinfo import ZoneInfo
+import time
 import requests
 from flask import Flask, jsonify, render_template, request
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 app = Flask(__name__)
 
-# SECURITY PRO-TIP: Load these from environment variables in production!
+# Security Credentials
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "8429261662:AAEHM6epwtqQPbvs-Ci9akw1CqGuBKKQA0k")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "-4879332986")
 
-# PAYME Merchant Credentials
-# Replace these with your actual Payme merchant workspace credentials
 PAYME_MERCHANT_ID = os.getenv("PAYME_MERCHANT_ID", "YOUR_MERCHANT_ID")
 PAYME_SECRET_KEY = os.getenv("PAYME_SECRET_KEY", "YOUR_SECRET_KEY")
+
+# API Base (Switch to checkout.test.paycom.uz if in staging/sandbox environment)
 PAYME_API = "https://checkout.paycom.uz/api"
 
-# Constructing standard JSON headers (Authentication is handled dynamically below)
+# Exact Payme Subscription Header Construction
 headers = {
+    "X-Auth": f"{PAYME_MERCHANT_ID}:{PAYME_SECRET_KEY}",
     "Content-Type": "application/json"
 }
 
@@ -29,79 +30,73 @@ def index():
 @app.route("/pay", methods=["POST"])
 def pay():
     data = request.json or {}
-
     token = data.get("token")
+    
     if not token:
         return jsonify({"status": "error", "message": "Missing card token"}), 400
 
     try:
-        # Convert amount safely and convert to tiyin (1 UZS = 100 tiyin)
+        # Payme handles monetary digits in Tiyin (1 UZS = 100 Tiyin)
         amount = int(float(data.get("amount", 0)) * 100)
     except (ValueError, TypeError):
         return jsonify({"status": "error", "message": "Invalid amount format"}), 400
-        
-    description = data.get("description", "Payme QR Sale")
-    order_id = data.get("order_id", str(uuid.uuid4())[:8])
 
-    # 1. Create Receipt
+    description = data.get("description", "Payme QR Sale")
+    order_id = str(data.get("order_id", int(time.time())))
+
+    # 1. Create Receipt Payload (Strict JSON-RPC Structure)
+    rpc_id = int(time.time() * 1000)
     receipt_payload = {
+        "jsonrpc": "2.0",
         "method": "receipts.create",
         "params": {
             "amount": amount,
-            "account": {"order_id": order_id},  # Must match your field identifier in Payme dashboard
+            "account": {"order_id": order_id}, 
             "description": description
         },
-        "id": str(uuid.uuid4())
+        "id": rpc_id
     }
 
     try:
-        # Pass (PAYME_MERCHANT_ID, PAYME_SECRET_KEY) into the auth tuple for HTTP Basic Auth
-        r = requests.post(
-            PAYME_API,
-            json=receipt_payload,
-            headers=headers,
-            auth=(PAYME_MERCHANT_ID, PAYME_SECRET_KEY),
-            timeout=10
-        )
+        r = requests.post(PAYME_API, json=receipt_payload, headers=headers, timeout=10)
         r.raise_for_status()
         receipt_res = r.json()
     except requests.exceptions.RequestException as e:
-        return jsonify({"status": "error", "step": "create", "message": str(e)}), 500
+        return jsonify({"status": "error", "step": "create_network", "message": str(e)}), 500
 
-    # Look out for top-level application errors returned by Payme API
-    if "error" in receipt_res or "result" not in receipt_res:
-        return jsonify({"status": "error", "step": "create", "response": receipt_res}), 400
+    # Catch internal JSON-RPC business logic errors
+    if "error" in receipt_res:
+        return jsonify({"status": "error", "step": "create_business", "response": receipt_res}), 400
+    if "result" not in receipt_res or "receipt" not in receipt_res["result"]:
+        return jsonify({"status": "error", "step": "create_parsing", "response": receipt_res}), 400
 
     receipt_id = receipt_res["result"]["receipt"]["_id"]
 
-    # 2. Pay Receipt
+    # 2. Pay Receipt Payload
     pay_payload = {
+        "jsonrpc": "2.0",
         "method": "receipts.pay",
         "params": {
             "id": receipt_id,
             "token": token
         },
-        "id": str(uuid.uuid4())
+        "id": rpc_id + 1
     }
 
     try:
-        r2 = requests.post(
-            PAYME_API,
-            json=pay_payload,
-            headers=headers,
-            auth=(PAYME_MERCHANT_ID, PAYME_SECRET_KEY),
-            timeout=10
-        )
+        r2 = requests.post(PAYME_API, json=pay_payload, headers=headers, timeout=10)
         r2.raise_for_status()
         pay_res = r2.json()
     except requests.exceptions.RequestException as e:
-        return jsonify({"status": "error", "step": "pay", "message": str(e)}), 500
+        return jsonify({"status": "error", "step": "pay_network", "message": str(e)}), 500
 
-    # 3. Handle Success / Failure
+    if "error" in pay_res:
+        return jsonify({"status": "error", "step": "pay_business", "response": pay_res}), 400
+
+    # 3. Handle Application Success Output
     if "result" in pay_res and "receipt" in pay_res["result"]:
         amount_uzs = amount / 100
         transaction_id = pay_res["result"]["receipt"]["_id"]
-
         current_time = datetime.now(ZoneInfo("Asia/Tashkent")).strftime("%Y-%m-%d %H:%M:%S")
 
         message = f"""
@@ -114,25 +109,20 @@ def pay():
 
 ✅ Payment has been processed successfully!
 """
-
-        # Non-blocking Telegram notification
+        # Async-safe Notification dispatching 
         try:
             requests.get(
                 f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-                params={
-                    "chat_id": CHAT_ID,
-                    "text": message,
-                    "parse_mode": "HTML"
-                },
-                timeout=5
+                params={"chat_id": CHAT_ID, "text": message, "parse_mode": "HTML"},
+                timeout=4
             )
         except requests.exceptions.RequestException:
-            pass  # Suppress notification delivery failures so checkout isn't interrupted
+            pass
 
         return jsonify({"status": "success", "response": pay_res})
 
     else:
-        return jsonify({"status": "error", "step": "pay", "response": pay_res}), 400
+        return jsonify({"status": "error", "step": "pay_unknown", "response": pay_res}), 400
 
 
 if __name__ == "__main__":
