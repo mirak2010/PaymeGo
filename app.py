@@ -1,22 +1,18 @@
-import os
-import time
+
+from flask import Flask, render_template, request, jsonify
 import requests
-from flask import Flask, jsonify, render_template, request
-from datetime import datetime
-from zoneinfo import ZoneInfo
+import uuid
 
 app = Flask(__name__)
+TELEGRAM_TOKEN = "8358856727:AAEcPwzqkkikQ93XeSykwFZNDSDqIjYNBjI"
+CHAT_ID = "-4931371309"  # your group ID
 
-# Security Credentials
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "8429261662:AAEHM6epwtqQPbvs-Ci9akw1CqGuBKKQA0k")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "-4879332986")
-
-PAYME_MERCHANT_ID = os.getenv("PAYME_MERCHANT_ID", "YOUR_MERCHANT_ID")
-PAYME_SECRET_KEY = os.getenv("PAYME_SECRET_KEY", "YOUR_SECRET_KEY")
+# LIVE credentials (move to .env or config file for production)
+X_AUTH = "684fb239dfc9ac0473696f29:fOOH#CY?vX@&Phdi05dYCv#kopHmnuSRBya8"
 PAYME_API = "https://checkout.paycom.uz/api"
 
 headers = {
-    "X-Auth": f"{PAYME_MERCHANT_ID}:{PAYME_SECRET_KEY}",
+    "X-Auth": X_AUTH,
     "Content-Type": "application/json"
 }
 
@@ -26,34 +22,20 @@ def index():
 
 @app.route("/pay", methods=["POST"])
 def pay():
-    data = request.json or {}
-    
-    # Token can be a saved card token or a dynamic 30-second Payme GO code scanned from a screen
+    data = request.json
     token = data.get("token")
-    payer_phone = data.get("phone") # Optional but highly recommended for Payme GO validation
-    
-    if not token:
-        return jsonify({"status": "error", "message": "Missing card token or Payme GO code"}), 400
+    amount = int(float(data.get("amount")) * 100)  # amount in tiyin
+    description = data.get("description", "Payme QR Sale")
 
-    try:
-        amount = int(float(data.get("amount", 0)) * 100)
-    except (ValueError, TypeError):
-        return jsonify({"status": "error", "message": "Invalid amount format"}), 400
-
-    description = data.get("description", "Payme Sale")
-    order_id = str(data.get("order_id", int(time.time())))
-
-    # 1. Create Receipt Payload
-    rpc_id = int(time.time() * 1000)
+    # 1. Create receipt
     receipt_payload = {
-        "jsonrpc": "2.0",
         "method": "receipts.create",
         "params": {
             "amount": amount,
-            "account": {"id": order_id}, 
+            "account": {},
             "description": description
         },
-        "id": rpc_id
+        "id": str(uuid.uuid4())
     }
 
     try:
@@ -61,28 +43,21 @@ def pay():
         r.raise_for_status()
         receipt_res = r.json()
     except requests.exceptions.RequestException as e:
-        return jsonify({"status": "error", "step": "create_network", "message": str(e)}), 500
+        return jsonify({"status": "error", "step": "create", "message": str(e)})
 
-    if "error" in receipt_res:
-        return jsonify({"status": "error", "step": "create_business", "response": receipt_res}), 400
+    if "result" not in receipt_res:
+        return jsonify({"status": "error", "step": "create", "response": receipt_res})
 
     receipt_id = receipt_res["result"]["receipt"]["_id"]
 
-    # 2. Pay Receipt Payload (Updated with dynamic 'payer' context block)
-    pay_params = {
-        "id": receipt_id,
-        "token": token
-    }
-    
-    # If a customer phone number is passed from the front-end scanning form, inject it
-    if payer_phone:
-        pay_params["payer"] = {"phone": str(payer_phone)}
-
+    # 2. Pay receipt
     pay_payload = {
-        "jsonrpc": "2.0",
         "method": "receipts.pay",
-        "params": pay_params,
-        "id": rpc_id + 1
+        "params": {
+            "id": receipt_id,
+            "token": token
+        },
+        "id": str(uuid.uuid4())
     }
 
     try:
@@ -90,39 +65,37 @@ def pay():
         r2.raise_for_status()
         pay_res = r2.json()
     except requests.exceptions.RequestException as e:
-        return jsonify({"status": "error", "step": "pay_network", "message": str(e)}), 500
+        return jsonify({"status": "error", "step": "pay", "message": str(e)})
 
-    if "error" in pay_res:
-        return jsonify({"status": "error", "step": "pay_business", "response": pay_res}), 400
-
-    # 3. Handle Success Verification Output
-    if "result" in pay_res and "receipt" in pay_res["result"]:
-        amount_uzs = amount / 100
+    if "result" in pay_res:
+        # Send Telegram message on successful payment
+        amount_uzs = amount / 100  # convert back from tiyin to UZS
         transaction_id = pay_res["result"]["receipt"]["_id"]
-        current_time = datetime.now(ZoneInfo("Asia/Tashkent")).strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Get current timestamp
+        from datetime import datetime
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        message = f"""🎉 Payment Successful!
 
-        message = f"""
-🎉 <b>Payment Successful!</b>
+💰 Amount: {amount_uzs} UZS
+🆔 Transaction ID: {transaction_id}
+🏪 Merchant: PAYME Payment
+⏰ Time: {current_time}
 
-💰 <b>Amount:</b> {amount_uzs:,.2f} UZS
-🆔 <b>Transaction ID:</b> {transaction_id}
-🏪 <b>Merchant:</b> PAYME Payment
-⏰ <b>Time:</b> {current_time} (Tashkent)
-
-✅ Payment has been processed successfully!
-"""
+✅ Payment has been processed successfully!"""
+        
         try:
             requests.get(
                 f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-                params={"chat_id": CHAT_ID, "text": message, "parse_mode": "HTML"},
-                timeout=4
+                params={"chat_id": CHAT_ID, "text": message}
             )
-        except requests.exceptions.RequestException:
-            pass
-
+        except:
+            pass  # Don't fail payment if Telegram fails
+        
         return jsonify({"status": "success", "response": pay_res})
     else:
-        return jsonify({"status": "error", "step": "pay_unknown", "response": pay_res}), 400
+        return jsonify({"status": "error", "step": "pay", "response": pay_res})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
