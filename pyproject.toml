@@ -23,3 +23,5 @@ ignore = ['W291', 'W292', 'W293']
 [build-system]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
+[tool.setuptools]
+py-modules = ["app"]
