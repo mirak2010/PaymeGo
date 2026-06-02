@@ -3,6 +3,7 @@ import requests
 import random
 import logging
 from datetime import datetime
+import pytz
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -101,7 +102,8 @@ def pay():
     if "result" in pay_res:
         amount_uzs = amount / 100
         transaction_id = pay_res["result"]["receipt"]["_id"]
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        tashkent = pytz.timezone("Asia/Tashkent")
+        current_time = datetime.now(tashkent).strftime("%Y-%m-%d %H:%M:%S")
         logging.info(f"Payment successful! Transaction ID: {transaction_id}")
 
         message = f"""🎉 Payment Successful!
