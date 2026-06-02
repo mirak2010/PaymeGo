@@ -2,8 +2,7 @@ from flask import Flask, render_template, request, jsonify
 import requests
 import random
 import logging
-from datetime import datetime
-import pytz
+from datetime import datetime, timezone, timedelta
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -102,7 +101,7 @@ def pay():
     if "result" in pay_res:
         amount_uzs = amount / 100
         transaction_id = pay_res["result"]["receipt"]["_id"]
-        tashkent = pytz.timezone("Asia/Tashkent")
+        tashkent = timezone(timedelta(hours=5))
         current_time = datetime.now(tashkent).strftime("%Y-%m-%d %H:%M:%S")
         logging.info(f"Payment successful! Transaction ID: {transaction_id}")
 
