@@ -26,7 +26,6 @@ def index():
 def pay():
     data = request.json
     token = data.get("token")
-    phone = data.get("phone", "998000000000")
     amount = int(float(data.get("amount")) * 100)  # convert UZS to tiyin
     description = data.get("description", "Payme QR Sale")
     order_id = data.get("order_id", str(random.randint(100000, 999999)))
@@ -63,10 +62,7 @@ def pay():
         "method": "receipts.pay",
         "params": {
             "id": receipt_id,
-            "token": token,
-            "payer": {
-                "phone": phone
-            }
+            "token": token
         },
         "id": random.randint(1, 99999)
     }
