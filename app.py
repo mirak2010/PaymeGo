@@ -30,6 +30,11 @@ def pay():
     description = data.get("description", "Payme QR Sale")
     order_id = data.get("order_id", str(random.randint(100000, 999999)))
 
+    logging.info(f"=== NEW PAYMENT REQUEST ===")
+    logging.info(f"Amount (tiyin): {amount}")
+    logging.info(f"Order ID: {order_id}")
+    logging.info(f"Token: {token}")
+
     # 1. Create receipt
     receipt_payload = {
         "method": "receipts.create",
@@ -43,19 +48,33 @@ def pay():
         "id": random.randint(1, 99999)
     }
 
+    logging.info(f"--- receipts.create payload: {receipt_payload}")
+
     try:
         r = requests.post(PAYME_API, json=receipt_payload, headers=headers, timeout=10)
+        logging.info(f"receipts.create HTTP status: {r.status_code}")
+        logging.info(f"receipts.create raw response: {r.text}")
         r.raise_for_status()
         receipt_res = r.json()
     except requests.exceptions.RequestException as e:
-        logging.error(f"Receipt creation error: {str(e)}")
+        logging.error(f"Receipt creation request error: {str(e)}")
         return jsonify({"status": "error", "step": "create", "message": str(e)}), 500
 
     if "result" not in receipt_res:
-        logging.error(f"Receipt creation failed: {receipt_res}")
-        return jsonify({"status": "error", "step": "create", "response": receipt_res}), 400
+        error_detail = receipt_res.get("error", receipt_res)
+        logging.error(f"receipts.create failed. Error code: {error_detail.get('code') if isinstance(error_detail, dict) else 'N/A'}")
+        logging.error(f"receipts.create failed. Error message: {error_detail.get('message') if isinstance(error_detail, dict) else error_detail}")
+        logging.error(f"receipts.create full response: {receipt_res}")
+        return jsonify({
+            "status": "error",
+            "step": "create",
+            "error_code": error_detail.get("code") if isinstance(error_detail, dict) else None,
+            "error_message": error_detail.get("message") if isinstance(error_detail, dict) else str(error_detail),
+            "full_response": receipt_res
+        }), 400
 
     receipt_id = receipt_res["result"]["receipt"]["_id"]
+    logging.info(f"Receipt created successfully. ID: {receipt_id}")
 
     # 2. Pay receipt
     pay_payload = {
@@ -67,18 +86,23 @@ def pay():
         "id": random.randint(1, 99999)
     }
 
+    logging.info(f"--- receipts.pay payload: {pay_payload}")
+
     try:
         r2 = requests.post(PAYME_API, json=pay_payload, headers=headers, timeout=10)
+        logging.info(f"receipts.pay HTTP status: {r2.status_code}")
+        logging.info(f"receipts.pay raw response: {r2.text}")
         r2.raise_for_status()
         pay_res = r2.json()
     except requests.exceptions.RequestException as e:
-        logging.error(f"Payment error: {str(e)}")
+        logging.error(f"Payment request error: {str(e)}")
         return jsonify({"status": "error", "step": "pay", "message": str(e)}), 500
 
     if "result" in pay_res:
         amount_uzs = amount / 100
         transaction_id = pay_res["result"]["receipt"]["_id"]
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        logging.info(f"Payment successful! Transaction ID: {transaction_id}")
 
         message = f"""🎉 Payment Successful!
 
@@ -100,8 +124,17 @@ def pay():
 
         return jsonify({"status": "success", "response": pay_res}), 200
     else:
-        logging.error(f"Payment failed: {pay_res}")
-        return jsonify({"status": "error", "step": "pay", "response": pay_res}), 400
+        error_detail = pay_res.get("error", pay_res)
+        logging.error(f"receipts.pay failed. Error code: {error_detail.get('code') if isinstance(error_detail, dict) else 'N/A'}")
+        logging.error(f"receipts.pay failed. Error message: {error_detail.get('message') if isinstance(error_detail, dict) else error_detail}")
+        logging.error(f"receipts.pay full response: {pay_res}")
+        return jsonify({
+            "status": "error",
+            "step": "pay",
+            "error_code": error_detail.get("code") if isinstance(error_detail, dict) else None,
+            "error_message": error_detail.get("message") if isinstance(error_detail, dict) else str(error_detail),
+            "full_response": pay_res
+        }), 400
 
 @app.errorhandler(404)
 def not_found(error):
