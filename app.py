@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, jsonify
 import requests
-import uuid
+import random
 import logging
 from datetime import datetime
 
@@ -8,10 +8,9 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
 TELEGRAM_TOKEN = "8358856727:AAEcPwzqkkikQ93XeSykwFZNDSDqIjYNBjI"
-CHAT_ID = "-4931371309"  # your group ID
+CHAT_ID = "-4931371309"
 
-# LIVE credentials (move to .env or config file for production)
-X_AUTH = "ec8WgoNvi4oJVbQq30Vmwi2rQok2hTFHav82"
+X_AUTH = "69b7d0a8a9308821b93fe4e0:ec8WgoNvi4oJVbQq30Vmwi2rQok2hTFHav82"
 PAYME_API = "https://checkout.paycom.uz/api"
 
 headers = {
@@ -27,18 +26,22 @@ def index():
 def pay():
     data = request.json
     token = data.get("token")
-    amount = int(float(data.get("amount")) * 100)  # amount in tiyin
+    phone = data.get("phone", "998000000000")
+    amount = int(float(data.get("amount")) * 100)  # convert UZS to tiyin
     description = data.get("description", "Payme QR Sale")
+    order_id = data.get("order_id", str(random.randint(100000, 999999)))
 
     # 1. Create receipt
     receipt_payload = {
         "method": "receipts.create",
         "params": {
             "amount": amount,
-            "account": {},
+            "account": {
+                "order_id": order_id
+            },
             "description": description
         },
-        "id": str(uuid.uuid4())
+        "id": random.randint(1, 99999)
     }
 
     try:
@@ -60,9 +63,12 @@ def pay():
         "method": "receipts.pay",
         "params": {
             "id": receipt_id,
-            "token": token
+            "token": token,
+            "payer": {
+                "phone": phone
+            }
         },
-        "id": str(uuid.uuid4())
+        "id": random.randint(1, 99999)
     }
 
     try:
@@ -74,11 +80,10 @@ def pay():
         return jsonify({"status": "error", "step": "pay", "message": str(e)}), 500
 
     if "result" in pay_res:
-        # Send Telegram message on successful payment
-        amount_uzs = amount / 100  # convert back from tiyin to UZS
+        amount_uzs = amount / 100
         transaction_id = pay_res["result"]["receipt"]["_id"]
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
+
         message = f"""🎉 Payment Successful!
 
 💰 Amount: {amount_uzs} UZS
@@ -87,7 +92,7 @@ def pay():
 ⏰ Time: {current_time}
 
 ✅ Payment has been processed successfully!"""
-        
+
         try:
             requests.get(
                 f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
@@ -96,7 +101,7 @@ def pay():
             )
         except Exception as e:
             logging.warning(f"Telegram notification failed: {str(e)}")
-        
+
         return jsonify({"status": "success", "response": pay_res}), 200
     else:
         logging.error(f"Payment failed: {pay_res}")
